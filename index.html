@@ -19,7 +19,24 @@ footer{background:var(--navy);color:#aebbd1;padding:27px 5vw;font-size:13px}.foo
 @media(max-width:850px){.hero-inner{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}.grid-4{grid-template-columns:1fr 1fr}.panel-layout{grid-template-columns:1fr}.sidebar{display:flex;overflow:auto;gap:5px}.sidebar h3{display:none}.side-link{white-space:nowrap;width:auto}.nav button:not(.primary){display:none}}
 @media(max-width:560px){.cards,.grid-4,.form-grid{grid-template-columns:1fr}.hero{padding:55px 22px}.hero h1{font-size:42px}.section{padding:48px 18px}.app-shell{padding:0 12px}.page-head h1{font-size:23px}}
 </style></head>
-<body>
+<!-- Supabase JavaScript Library -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+   const SUPABASE_URL = "https://rbzsheobwimqyihkqdor.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_CpzB1N4n6rMgUWEJRhgQRA_K_1I8Kjc";
+
+  const { createClient } = window.supabase;
+
+  window.supabaseClient = createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
+
+  console.log("Supabase client initialized!");
+</script>  console.log("Supabase client initialized!");
+</script>
+ <body>
 <header><a class="logo" href="#" onclick="showHome();return false">testyourself</a><nav class="nav" id="topNav"><button onclick="showHome()" class="active">Home</button><button onclick="showStudent()">Student Portal</button><button onclick="showAdmin()">Admin Panel</button><button class="primary" onclick="showStudent()">Student Login</button></nav></header>
 <main id="homeView">
 <section class="hero"><div class="hero-inner"><div><div class="eyebrow">Learn • Practise • Improve</div><h1>Practice today.<br><span>Achieve tomorrow.</span></h1><p>A focused learning and examination platform for competitive-exam aspirants. Build strong concepts, practise regularly and measure your progress.</p><div class="hero-actions"><button class="btn primary" onclick="showStudent()">Explore Student Portal</button><button class="btn outline" onclick="showAdmin()">Admin Panel Preview</button></div></div><div class="hero-card"><div class="eyebrow">Your preparation starts here</div><h3>Make every practice count.</h3><p>Learn at your pace. Attempt mock tests. Understand your performance and keep improving.</p><div class="stats"><div class="stat"><b>01</b><small>Learn concepts</small></div><div class="stat"><b>02</b><small>Practise daily</small></div><div class="stat"><b>03</b><small>Review answers</small></div><div class="stat"><b>04</b><small>Improve scores</small></div></div></div></div></section>
