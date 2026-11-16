@@ -415,62 +415,295 @@ function adminContent(){
 }
 
 function renderStudent(){
- $("appView").innerHTML=`
- <div class="app-shell">
-  <div class="page-head">
-   <div><div class="eyebrow">Student portal</div>
-   <h1>Welcome to Practice</h1></div>
-   <button class="btn outline" onclick="showHome()">← Home</button>
-  </div>
-  <div class="box">
-   <h3>Choose your language / તમારી ભાષા પસંદ કરો</h3>
-   <select id="studentLanguage" onchange="setStudentLanguage(this.value)">
-    <option value="en">English</option>
-    <option value="gu">ગુજરાતી</option>
-    <option value="both">English + ગુજરાતી</option>
-   </select>
-   <p class="muted">Your language choice will be used when displaying bilingual questions.</p>
-  </div>
-  <div class="box">
-   <h3>Available practice</h3>
-   <p class="muted">Student examinations will appear here once the exam module is connected.</p>
-  </div>
- </div>`;
-}
 
-let studentLanguage='en';
+async function renderStudent(message = "") {
+  const app = $("appView");
+  const client = window.supabaseClient;
 
-function setStudentLanguage(value){
- studentLanguage=value;
-}
-
-function parseCSV(text){
- let rows=[],row=[],cell='',quoted=false;
-
- for(let i=0;i<text.length;i++){
-  let c=text[i];
-
-  if(c==='"'&&quoted&&text[i+1]==='"'){
-   cell+='"';i++;
-  }else if(c==='"'){
-   quoted=!quoted;
-  }else if(c===','&&!quoted){
-   row.push(cell);cell='';
-  }else if((c==='\n'||c==='\r')&&!quoted){
-   if(c==='\r'&&text[i+1]==='\n')i++;
-   row.push(cell);
-   if(row.some(v=>v.trim()))rows.push(row);
-   row=[];cell='';
-  }else{
-   cell+=c;
+  if (!client) {
+    app.innerHTML = `<div class="app-shell"><div class="notice">Supabase connection unavailable. Please try again.</div></div>`;
+    return;
   }
- }
 
- row.push(cell);
- if(row.some(v=>v.trim()))rows.push(row);
- return rows;
+  const { data: { session }, error } = await client.auth.getSession();
+
+  if (error || !session) {
+    renderStudentAuth(message);
+    return;
+  }
+
+  const { data: profile, error: profileError } = await client
+    .from("profiles")
+    .select("full_name,mobile_number,course_interested,study_level,exam_medium,role")
+    .eq("id", session.user.id)
+    .single();
+
+  if (profileError || !profile) {
+    app.innerHTML = `
+      <div class="app-shell">
+        <div class="box">
+          <h2>Profile not available</h2>
+          <p class="muted">${esc(profileError?.message || "Please contact the administrator.")}</p>
+          <button class="btn danger" onclick="studentLogout()">Sign out</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (profile.role !== "student") {
+    app.innerHTML = `
+      <div class="app-shell">
+        <div class="notice">This portal is for student accounts. Please use the appropriate account.</div>
+        <button class="btn danger" onclick="studentLogout()">Sign out</button>
+      </div>`;
+    return;
+  }
+
+  const medium = {
+    english: "English",
+    gujarati: "ગુજરાતી",
+    both: "English + ગુજરાતી"
+  };
+
+  app.innerHTML = `
+    <div class="app-shell">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Student learning space</div>
+          <h1>Welcome, ${esc(profile.full_name || "Student")}!</h1>
+          <div class="muted">${esc(session.user.email)}</div>
+        </div>
+        <div>
+          <button class="btn outline" onclick="showHome()">Home</button>
+          <button class="btn danger" onclick="studentLogout()">Sign out</button>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>My student profile</h3>
+        <div class="form-grid">
+          <div><small class="muted">Mobile number</small><p>${esc(profile.mobile_number || "Not provided")}</p></div>
+          <div><small class="muted">Interested course</small><p>${esc(profile.course_interested || "Not provided")}</p></div>
+          <div><small class="muted">Study level</small><p>${esc(profile.study_level || "Not provided")}</p></div>
+          <div><small class="muted">Exam medium</small><p>${esc(medium[profile.exam_medium] || profile.exam_medium || "Not provided")}</p></div>
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>My examinations</h3>
+        <p class="muted">Your examination dashboard is ready for the next development step. Published database examinations will be connected here.</p>
+      </div>
+    </div>`;
 }
 
+function renderStudentAuth(message = "") {
+  $("appView").innerHTML = `
+    <div class="app-shell" style="max-width:650px">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Student account</div>
+          <h1 id="studentAuthTitle">Student Login</h1>
+          <p class="muted">Sign in or create your testyourself account.</p>
+        </div>
+        <button class="btn outline" onclick="showHome()">← Home</button>
+      </div>
+
+      <div class="box">
+        <div class="toolbar">
+          <button class="btn primary" id="studentLoginTab" onclick="switchStudentAuth('login')">Login</button>
+          <button class="btn outline" id="studentRegisterTab" onclick="switchStudentAuth('register')">Create account</button>
+        </div>
+
+        <div id="studentAuthMessage" class="notice ${message ? "" : "hidden"}">${esc(message)}</div>
+
+        <form id="studentLoginForm" onsubmit="studentLogin(event)">
+          <div class="field">
+            <label>Email address</label>
+            <input id="loginEmail" type="email" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input id="loginPassword" type="password" autocomplete="current-password" required>
+          </div>
+          <button class="btn primary" type="submit">Sign in</button>
+        </form>
+
+        <form id="studentRegisterForm" class="hidden" onsubmit="studentRegister(event)">
+          <div class="field">
+            <label>Full name</label>
+            <input id="regName" maxlength="100" required>
+          </div>
+          <div class="field">
+            <label>Email address</label>
+            <input id="regEmail" type="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label>Mobile number</label>
+            <input id="regMobile" type="tel" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" placeholder="10-digit mobile number" required>
+          </div>
+          <div class="field">
+            <label>Create password</label>
+            <input id="regPassword" type="password" minlength="8" autocomplete="new-password" required>
+            <small class="muted">Use at least 8 characters.</small>
+          </div>
+          <div class="field">
+            <label>Confirm password</label>
+            <input id="regConfirmPassword" type="password" minlength="8" autocomplete="new-password" required>
+          </div>
+          <div class="field">
+            <label>Course interested in</label>
+            <select id="regCourse" required>
+              <option value="">Select course</option>
+              <option value="GPSC">GPSC</option>
+              <option value="UPSC">UPSC</option>
+              <option value="Police PSI / ASI">Police PSI / ASI</option>
+              <option value="Police Constable">Police Constable</option>
+              <option value="School">School examinations</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Current study level</label>
+            <select id="regLevel" required>
+              <option value="">Select study level</option>
+              <option value="School student">School student</option>
+              <option value="12th pass">12th pass</option>
+              <option value="Graduate">Graduate</option>
+              <option value="Postgraduate">Postgraduate</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Preferred examination medium</label>
+            <select id="regMedium" required>
+              <option value="">Select medium</option>
+              <option value="english">English</option>
+              <option value="gujarati">ગુજરાતી</option>
+              <option value="both">English + ગુજરાતી</option>
+            </select>
+          </div>
+          <button class="btn primary" type="submit" id="registerSubmit">Create student account</button>
+        </form>
+
+        <p class="muted" style="font-size:12px;margin-top:16px">
+          Your password is handled securely by Supabase Authentication.
+          Never share it with anyone.
+        </p>
+      </div>
+    </div>`;
+}
+
+function switchStudentAuth(mode) {
+  const login = mode === "login";
+  $("studentLoginForm").classList.toggle("hidden", !login);
+  $("studentRegisterForm").classList.toggle("hidden", login);
+  $("studentLoginTab").className = login ? "btn primary" : "btn outline";
+  $("studentRegisterTab").className = login ? "btn outline" : "btn primary";
+  $("studentAuthTitle").textContent = login ? "Student Login" : "Student Registration";
+  $("studentAuthMessage").classList.add("hidden");
+}
+
+async function studentRegister(event) {
+  event.preventDefault();
+
+  const client = window.supabaseClient;
+  const name = $("regName").value.trim();
+  const email = $("regEmail").value.trim();
+  const mobile = $("regMobile").value.trim();
+  const password = $("regPassword").value;
+  const confirmPassword = $("regConfirmPassword").value;
+  const course = $("regCourse").value;
+  const level = $("regLevel").value;
+  const medium = $("regMedium").value;
+
+  if (password !== confirmPassword) {
+    showStudentAuthMessage("The passwords do not match.");
+    return;
+  }
+
+  if (!/^[0-9]{10}$/.test(mobile)) {
+    showStudentAuthMessage("Enter a valid 10-digit mobile number.");
+    return;
+  }
+
+  const button = $("registerSubmit");
+  button.disabled = true;
+  button.textContent = "Creating account...";
+
+  try {
+    const { data, error } = await client.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name,
+          mobile_number: mobile,
+          course_interested: course,
+          study_level: level,
+          exam_medium: medium
+        }
+      }
+    });
+
+    if (error) throw error;
+
+    if (data.session) {
+      await renderStudent("Your student account was created successfully.");
+    } else {
+      showStudentAuthMessage(
+        "Your account request was accepted. No active session was returned. Please check the Supabase email-confirmation setting before trying to sign in."
+      );
+      switchStudentAuth("login");
+    }
+  } catch (error) {
+    showStudentAuthMessage("Registration failed: " + error.message);
+  } finally {
+    const submit = $("registerSubmit");
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Create student account";
+    }
+  }
+}
+
+async function studentLogin(event) {
+  event.preventDefault();
+
+  const email = $("loginEmail").value.trim();
+  const password = $("loginPassword").value;
+
+  const { error } = await window.supabaseClient.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    showStudentAuthMessage("Login failed: " + error.message);
+    return;
+  }
+
+  await renderStudent("You are signed in.");
+}
+
+function showStudentAuthMessage(message) {
+  const el = $("studentAuthMessage");
+  if (!el) {
+    renderStudentAuth(message);
+    return;
+  }
+  el.textContent = message;
+  el.classList.remove("hidden");
+}
+
+async function studentLogout() {
+  const { error } = await window.supabaseClient.auth.signOut();
+  if (error) {
+    alert("Sign-out failed: " + error.message);
+    return;
+  }
+  renderStudentAuth("You have signed out.");
+}
+ 
 async function importCSV(){
  const file=$("csvFile").files[0];
 
