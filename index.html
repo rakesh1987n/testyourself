@@ -414,8 +414,6 @@ function adminContent(){
  return `<div class="box">Select an admin section.</div>`;
 }
 
-function renderStudent(){
-
 async function renderStudent(message = "") {
   const app = $("appView");
   const client = window.supabaseClient;
@@ -425,9 +423,14 @@ async function renderStudent(message = "") {
     return;
   }
 
-  const { data: { session }, error } = await client.auth.getSession();
+  const { data: { session }, error: sessionError } = await client.auth.getSession();
 
-  if (error || !session) {
+  if (sessionError) {
+    renderStudentAuth("Could not check your login: " + sessionError.message);
+    return;
+  }
+
+  if (!session) {
     renderStudentAuth(message);
     return;
   }
@@ -442,7 +445,7 @@ async function renderStudent(message = "") {
     app.innerHTML = `
       <div class="app-shell">
         <div class="box">
-          <h2>Profile not available</h2>
+          <h2>Student profile not available</h2>
           <p class="muted">${esc(profileError?.message || "Please contact the administrator.")}</p>
           <button class="btn danger" onclick="studentLogout()">Sign out</button>
         </div>
@@ -471,7 +474,7 @@ async function renderStudent(message = "") {
         <div>
           <div class="eyebrow">Student learning space</div>
           <h1>Welcome, ${esc(profile.full_name || "Student")}!</h1>
-          <div class="muted">${esc(session.user.email)}</div>
+          <div class="muted">${esc(session.user.email || "")}</div>
         </div>
         <div>
           <button class="btn outline" onclick="showHome()">Home</button>
@@ -491,12 +494,12 @@ async function renderStudent(message = "") {
 
       <div class="box">
         <h3>My examinations</h3>
-        <p class="muted">Your examination dashboard is ready for the next development step. Published database examinations will be connected here.</p>
+        <p class="muted">Your account is ready. Published examinations will appear here when the examination module is connected.</p>
       </div>
     </div>`;
 }
 
-function renderStudentAuth(message = "") {
+function renderStudentAuth(message = "", initialMode = "login") {
   $("appView").innerHTML = `
     <div class="app-shell" style="max-width:650px">
       <div class="page-head">
@@ -510,48 +513,48 @@ function renderStudentAuth(message = "") {
 
       <div class="box">
         <div class="toolbar">
-          <button class="btn primary" id="studentLoginTab" onclick="switchStudentAuth('login')">Login</button>
-          <button class="btn outline" id="studentRegisterTab" onclick="switchStudentAuth('register')">Create account</button>
+          <button type="button" class="btn primary" id="studentLoginTab" onclick="switchStudentAuth('login')">Login</button>
+          <button type="button" class="btn outline" id="studentRegisterTab" onclick="switchStudentAuth('register')">Create account</button>
         </div>
 
         <div id="studentAuthMessage" class="notice ${message ? "" : "hidden"}">${esc(message)}</div>
 
         <form id="studentLoginForm" onsubmit="studentLogin(event)">
           <div class="field">
-            <label>Email address</label>
+            <label for="loginEmail">Email address</label>
             <input id="loginEmail" type="email" autocomplete="username" required>
           </div>
           <div class="field">
-            <label>Password</label>
+            <label for="loginPassword">Password</label>
             <input id="loginPassword" type="password" autocomplete="current-password" required>
           </div>
-          <button class="btn primary" type="submit">Sign in</button>
+          <button class="btn primary" type="submit" id="loginSubmit">Sign in</button>
         </form>
 
         <form id="studentRegisterForm" class="hidden" onsubmit="studentRegister(event)">
           <div class="field">
-            <label>Full name</label>
-            <input id="regName" maxlength="100" required>
+            <label for="regName">Full name</label>
+            <input id="regName" maxlength="100" autocomplete="name" required>
           </div>
           <div class="field">
-            <label>Email address</label>
+            <label for="regEmail">Email address</label>
             <input id="regEmail" type="email" autocomplete="email" required>
           </div>
           <div class="field">
-            <label>Mobile number</label>
+            <label for="regMobile">Mobile number</label>
             <input id="regMobile" type="tel" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" placeholder="10-digit mobile number" required>
           </div>
           <div class="field">
-            <label>Create password</label>
+            <label for="regPassword">Create password</label>
             <input id="regPassword" type="password" minlength="8" autocomplete="new-password" required>
             <small class="muted">Use at least 8 characters.</small>
           </div>
           <div class="field">
-            <label>Confirm password</label>
+            <label for="regConfirmPassword">Confirm password</label>
             <input id="regConfirmPassword" type="password" minlength="8" autocomplete="new-password" required>
           </div>
           <div class="field">
-            <label>Course interested in</label>
+            <label for="regCourse">Course interested in</label>
             <select id="regCourse" required>
               <option value="">Select course</option>
               <option value="GPSC">GPSC</option>
@@ -563,7 +566,7 @@ function renderStudentAuth(message = "") {
             </select>
           </div>
           <div class="field">
-            <label>Current study level</label>
+            <label for="regLevel">Current study level</label>
             <select id="regLevel" required>
               <option value="">Select study level</option>
               <option value="School student">School student</option>
@@ -574,7 +577,7 @@ function renderStudentAuth(message = "") {
             </select>
           </div>
           <div class="field">
-            <label>Preferred examination medium</label>
+            <label for="regMedium">Preferred examination medium</label>
             <select id="regMedium" required>
               <option value="">Select medium</option>
               <option value="english">English</option>
@@ -586,11 +589,12 @@ function renderStudentAuth(message = "") {
         </form>
 
         <p class="muted" style="font-size:12px;margin-top:16px">
-          Your password is handled securely by Supabase Authentication.
-          Never share it with anyone.
+          Supabase Authentication securely manages your password. Never share it with anyone.
         </p>
       </div>
     </div>`;
+
+  if (initialMode === "register") switchStudentAuth("register");
 }
 
 function switchStudentAuth(mode) {
@@ -608,7 +612,7 @@ async function studentRegister(event) {
 
   const client = window.supabaseClient;
   const name = $("regName").value.trim();
-  const email = $("regEmail").value.trim();
+  const email = $("regEmail").value.trim().toLowerCase();
   const mobile = $("regMobile").value.trim();
   const password = $("regPassword").value;
   const confirmPassword = $("regConfirmPassword").value;
@@ -620,9 +624,12 @@ async function studentRegister(event) {
     showStudentAuthMessage("The passwords do not match.");
     return;
   }
-
   if (!/^[0-9]{10}$/.test(mobile)) {
     showStudentAuthMessage("Enter a valid 10-digit mobile number.");
+    return;
+  }
+  if (password.length < 8) {
+    showStudentAuthMessage("Use a password with at least 8 characters.");
     return;
   }
 
@@ -650,10 +657,10 @@ async function studentRegister(event) {
     if (data.session) {
       await renderStudent("Your student account was created successfully.");
     } else {
-      showStudentAuthMessage(
-        "Your account request was accepted. No active session was returned. Please check the Supabase email-confirmation setting before trying to sign in."
+      renderStudentAuth(
+        "The account was created, but Supabase did not return a login session. Please confirm that email confirmation is OFF in Supabase Auth, then sign in.",
+        "login"
       );
-      switchStudentAuth("login");
     }
   } catch (error) {
     showStudentAuthMessage("Registration failed: " + error.message);
@@ -669,20 +676,29 @@ async function studentRegister(event) {
 async function studentLogin(event) {
   event.preventDefault();
 
-  const email = $("loginEmail").value.trim();
-  const password = $("loginPassword").value;
+  const button = $("loginSubmit");
+  button.disabled = true;
+  button.textContent = "Signing in...";
 
-  const { error } = await window.supabaseClient.auth.signInWithPassword({
-    email,
-    password
-  });
+  try {
+    const email = $("loginEmail").value.trim().toLowerCase();
+    const password = $("loginPassword").value;
+    const { error } = await window.supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
 
-  if (error) {
+    if (error) throw error;
+    await renderStudent("You are signed in.");
+  } catch (error) {
     showStudentAuthMessage("Login failed: " + error.message);
-    return;
+  } finally {
+    const submit = $("loginSubmit");
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Sign in";
+    }
   }
-
-  await renderStudent("You are signed in.");
 }
 
 function showStudentAuthMessage(message) {
@@ -703,7 +719,7 @@ async function studentLogout() {
   }
   renderStudentAuth("You have signed out.");
 }
- 
+
 async function importCSV(){
  const file=$("csvFile").files[0];
 
